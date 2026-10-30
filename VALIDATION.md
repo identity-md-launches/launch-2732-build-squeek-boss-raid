@@ -2,6 +2,10 @@
 
 Scope: the three reopened findings in the existing static Squeek Boss Raid game. The existing React/Vite stack, game art, wallet connector, attack transaction and event protocol were retained. Changed surfaces are shared damage, historical event recognition, telemetry freshness and their loading/error states. The final export is `dist/`, served at `/preview/index.html` by the foreground browser test.
 
+## Second revision: unavailable readings on narrow phones
+
+Finding `fb84897dea3bc0908fffbcd19e39a56fe807287227497b9bf0171bd59cb5fc74` reproduced in Chromium in the expired-telemetry fixture (both API hosts 503, clock +180 s). `tests/raid.browser.mjs` now measures each stat's painted text with a `Range` against its own cell and against every other stat label/value at 320, 361, 375 and 390 wide. Against the previous export, the check failed with `Unavailable spills its cell` twice, while `scrollWidth` stayed within the viewport. Fix: `src/styles.css:119`. At ≤420px `.wheel-row` is now `grid-template-columns: minmax(0, 1fr)`, so the 48px wheel sits above full-width two-column stats. Gap, wheel size, stat tracks and type sizes are unchanged. After rebuilding, `npm run test:browser` exited 0 with no collisions at all four widths. At 390 Attack still ends inside the 844px first screen. The 320 live and 390 expired screenshots show separate labels and values. `npm test` passed 11/11 and the design probe passed 16/16. Playwright came from a locally available 1.64.1 install, not the path listed below. WebKit was again unavailable (`webkit-2370` executable missing), so the reported WebKit collision was not rechecked in WebKit.
+
 ## Reproduction and disposition
 
 All three reports reproduced against the original production export in Chromium at 390×844, without connecting a wallet. The initial run of `tests/raid.browser.mjs --reproduce` recorded:
@@ -18,7 +22,7 @@ Conversion evidence: the public `/v1/measurement/stats?range=7d` response return
 
 ## Additional applicable finding
 
-The new unavailable readings initially widened the phone arena. The saved 390px expiry screenshot showed the panel extending beyond the viewport. `src/styles.css:118` now uses the existing spacing tokens with a 48px wheel, flexible stat tracks, and the body type token at ≤360px. Rechecked with expiry-state overflow assertions at 320 and 390 and final screenshots. Running, pending and normal live layouts were also rechecked. No unrelated visual redesign was made.
+The new unavailable readings initially widened the phone arena. The saved 390px expiry screenshot showed the panel extending beyond the viewport. `src/styles.css:118` now uses the existing spacing tokens with a 48px wheel stacked above flexible stat tracks (see the second revision above), and the body type token at ≤360px. Rechecked with expiry-state overflow assertions at 320 and 390 and final screenshots. Running, pending and normal live layouts were also rechecked. No unrelated visual redesign was made.
 
 ## Commands and actual results
 

@@ -114,9 +114,9 @@ main { max-width: 1080px; margin: 0 auto; padding: 0 var(--space-4) var(--space-
 .stats { margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2) var(--space-4); }
 .stats dt { color: var(--muted); font-size: var(--fs-sm); }
 .stats dd { margin: 0; font-weight: 800; font-size: var(--fs-md); }
-/* Keep the explicit unavailable readings inside the arena on narrow phones. */
+/* On narrow phones the wheel sits above full-width stats, so "Unavailable" never paints over the next cell. */
 @media (max-width: 420px) {
-  .wheel-row { grid-template-columns: 48px minmax(0, 1fr); gap: var(--space-2); }
+  .wheel-row { grid-template-columns: minmax(0, 1fr); gap: var(--space-2); }
   .wheel { width: 48px; height: 48px; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 }

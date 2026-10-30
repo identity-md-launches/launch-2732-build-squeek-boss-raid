@@ -38,7 +38,7 @@ H1 is 28px on phones and 40px at the desktop breakpoint. H2, Attack and regular 
 
 Spacing tokens are 4, 8, 12, 16, 24 and 32px (`--space-1` through `--space-6`). Header, main and footer share a 1080px maximum width with 16px inline padding. Main sections have 24px gaps; panel interiors use 16px padding and 12–16px gaps.
 
-Below 900px, sections stack in document order. The stage puts the 120px Boss beside its HP. Wheel statistics use two columns. At 420px and below, the wheel uses a 48px column, 8px gaps and `minmax(0, 1fr)` tracks; labels wrap naturally. At 360px and below, stat values use 16px. These rules keep the explicit unavailable state within 320 and 390px viewports.
+Below 900px, sections stack in document order. The stage puts the 120px Boss beside its HP. Wheel statistics use two columns. At 420px and below, the wheel row becomes one `minmax(0, 1fr)` column: the 48px wheel sits above full-width stats, which keep two `minmax(0, 1fr)` tracks and 8px gaps; labels wrap naturally. At 360px and below, stat values use 16px. These rules keep the explicit unavailable state within its own cells from 320 to 420px wide, with no text painting into a neighbouring label.
 
 At 900px and above, main becomes two columns. The arena spans both columns, with the Boss on the left and wheel/Attack on the right; the sprite grows to 200px. Leaderboard and summary sit side by side. Instructions span the main width. Under 640px the wallet dialog becomes a bottom sheet with safe-area padding; otherwise it is centered and at most 420px wide.
 

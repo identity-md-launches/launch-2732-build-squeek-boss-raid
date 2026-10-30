@@ -185,9 +185,25 @@ try {
     assert.equal(await wheelDamage(stale.page), before);
     await stale.page.getByText("Live wheel unavailable. Retrying.", { exact: true }).waitFor();
     await mkdir("test/scratch/regression", { recursive: true });
-    for (const width of [320, 390]) {
+    for (const width of [320, 361, 375, 390]) {
       await stale.page.setViewportSize({ width, height: 844 });
       assert.equal(await stale.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `expired telemetry overflow at ${width}`);
+      // Painted text extents, not element boxes: an unbreakable value can spill into the next cell.
+      const collisions = await stale.page.evaluate(() => {
+        const boxes = [...document.querySelectorAll(".stats dt, .stats dd")].map((el) => {
+          const range = document.createRange(); range.selectNodeContents(el);
+          return { text: el.textContent, rects: [...range.getClientRects()], cell: el.getBoundingClientRect() };
+        });
+        const hits = [];
+        for (const a of boxes) {
+          for (const r of a.rects) if (r.right > a.cell.right + 0.5 || r.left < a.cell.left - 0.5) hits.push(`${a.text} spills its cell`);
+          for (const b of boxes) if (a !== b) for (const r of a.rects) for (const s of b.rects)
+            if (r.left < s.right - 0.5 && s.left < r.right - 0.5 && r.top < s.bottom - 0.5 && s.top < r.bottom - 0.5) hits.push(`${a.text} overlaps ${b.text}`);
+        }
+        return hits;
+      });
+      assert.deepEqual(collisions, [], `expired telemetry text collision at ${width}`);
+      if (width === 390) assert.equal(await stale.page.getByRole("button", { name: "Attack", exact: true }).evaluate((el) => el.getBoundingClientRect().bottom < innerHeight), true);
     }
     await stale.page.screenshot({ path: "test/scratch/regression/expired-390.png", fullPage: true });
     state.fail = false; state.observedAt = "2026-10-30T16:03:00Z";
