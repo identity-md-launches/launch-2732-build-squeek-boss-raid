@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:browser": "node --experimental-strip-types tests/raid.browser.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

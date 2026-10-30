@@ -14,25 +14,25 @@ const nf = new Intl.NumberFormat("en-US");
 const EXPLORER = "https://sepolia.etherscan.io";
 
 export function App() {
-  const { wheel, round, error: apiError, rounds, settled } = useSqueek();
+  const { wheel, round, error: apiError, roundError, rounds, settled } = useSqueek();
   const { hits, latest, error: rpcError, loaded, refresh } = useAttacks(round);
   const boss = useMemo(() => (round === null ? null : bossFor(round)), [round]);
 
-  const wheelDamage = round === null ? 0 : Math.floor((rounds[round.toString()]?.wheelMm ?? 0) / MM_PER_DAMAGE);
+  const wheelMm = round === null ? undefined : rounds[round.toString()]?.wheelMm;
+  const wheelDamage = wheelMm === undefined ? null : Math.floor(wheelMm / MM_PER_DAMAGE);
   const roundHits = useMemo(() => (round === null ? [] : hits.filter((h) => h.round === round)), [hits, round]);
   const playerDamage = roundHits.reduce((s, h) => s + h.damage, 0);
-  const total = wheelDamage + playerDamage;
-  const hpLeft = boss ? Math.max(0, boss.hp - total) : 0;
-  const pct = boss ? (hpLeft / boss.hp) * 100 : 100;
+  const total = wheelDamage === null || !loaded ? null : wheelDamage + playerDamage;
+  const hpLeft = boss && total !== null ? Math.max(0, boss.hp - total) : null;
+  const pct = boss && hpLeft !== null ? (hpLeft / boss.hp) * 100 : 100;
   const dps = wheel ? wheel.speedMmPerSecond / MM_PER_DAMAGE : 0;
-  const fromStart = round !== null && rounds[round.toString()]?.fromStart;
-  const startAt = round !== null ? rounds[round.toString()]?.startAt : undefined;
+  const liveWheel = wheel && !wheel.stale && !apiError;
 
   // A short shake on the Boss whenever a new hit lands or the wheel deals damage.
   const [hurt, setHurt] = useState(false);
   const lastTotal = useRef(total);
   useEffect(() => {
-    if (total > lastTotal.current) {
+    if (total !== null && lastTotal.current !== null && total > lastTotal.current) {
       setHurt(true);
       const t = setTimeout(() => setHurt(false), 300);
       lastTotal.current = total;
@@ -69,9 +69,9 @@ export function App() {
             <div className="hp">
               <div className="hp-label">
                 <span>Boss HP</span>
-                <span className="num">{boss ? `${nf.format(hpLeft)} / ${nf.format(boss.hp)}` : "…"}</span>
+                <span className="num">{boss && hpLeft !== null ? `${nf.format(hpLeft)} / ${nf.format(boss.hp)}` : wheelDamage === null ? "Awaiting wheel total" : "Reading attacks"}</span>
               </div>
-              <div className="hp-track" role="progressbar" aria-label="Boss HP left" aria-valuemin={0} aria-valuemax={boss?.hp ?? 0} aria-valuenow={hpLeft}>
+              <div className="hp-track" role="progressbar" aria-label="Boss HP left" aria-valuemin={0} aria-valuemax={boss?.hp ?? undefined} aria-valuenow={hpLeft ?? undefined} aria-valuetext={hpLeft === null ? "Reading shared damage totals" : undefined}>
                 <div className="hp-fill" style={{ width: `${pct}%` }} />
               </div>
               {boss && hpLeft === 0 && <p className="note good" role="status">Defeated. A new Boss spawns when Squeekchain settles this round.</p>}
@@ -79,31 +79,29 @@ export function App() {
           </div>
 
           <div className="wheel-row">
-            <HamsterWheel running={!!wheel?.running} />
+            <HamsterWheel running={!!liveWheel && wheel.running} />
             <dl className="stats">
-              <div><dt>Wheel speed</dt><dd className="num">{wheel ? `${(wheel.speedMmPerSecond * 0.0036).toFixed(2)} km/h` : "…"}</dd></div>
-              <div><dt>Hamster damage</dt><dd className="num">{wheel ? `${nf.format(Math.round(dps))} per s` : "…"}</dd></div>
-              <div><dt>Wheel hits this round</dt><dd className="num">{nf.format(wheelDamage)}</dd></div>
+              <div><dt>Wheel speed</dt><dd className="num">{liveWheel ? `${(wheel.speedMmPerSecond * 0.0036).toFixed(2)} km/h` : "Unavailable"}</dd></div>
+              <div><dt>Hamster damage</dt><dd className="num">{liveWheel ? `${nf.format(Math.round(dps))} per s` : "Unavailable"}</dd></div>
+              <div><dt>Wheel hits this round</dt><dd className="num">{wheelDamage === null ? "Pending" : nf.format(wheelDamage)}</dd></div>
               <div><dt>Player hits this round</dt><dd className="num">{nf.format(playerDamage)}</dd></div>
             </dl>
           </div>
           <p className="fine" aria-live="polite">
-            {apiError && !wheel
-              ? `Squeekchain API did not answer (${apiError}). Retrying every few seconds.`
-              : wheel?.stale
-                ? "The wheel sensor has gone quiet, so the hamster deals no damage until it reports again."
+            {apiError || wheel?.stale
+              ? "Live wheel unavailable. Retrying."
+              : roundError || wheelDamage === null
+                ? "Shared round total unavailable. Retrying."
                 : wheel && !wheel.running
                   ? "The hamster is resting. Wheel damage resumes when it runs."
-                  : startAt && !fromStart
-                    ? `Wheel damage counted since ${new Date(startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}, when this page joined the round.`
-                    : "Wheel damage counted from the start of this round."}
+                  : "Wheel damage counted from the shared start of this round."}
           </p>
 
           <AttackPanel round={round} hits={hits} latest={latest} onLanded={refresh} />
         </section>
 
         <Boards hits={hits} round={round} loaded={loaded} error={rpcError} />
-        <Summary settled={settled} hits={hits} />
+        <Summary settled={settled} hits={hits} loaded={loaded} />
         <HowTo />
       </main>
 
@@ -235,7 +233,7 @@ function Table({ rows }: { rows: Row[] }) {
   );
 }
 
-function Summary({ settled, hits }: { settled: Settled | null; hits: Hit[] }) {
+function Summary({ settled, hits, loaded }: { settled: Settled | null; hits: Hit[]; loaded: boolean }) {
   if (!settled) {
     return (
       <section className="panel" aria-labelledby="summary-title">
@@ -248,6 +246,14 @@ function Summary({ settled, hits }: { settled: Settled | null; hits: Hit[] }) {
   const boss = bossFor(r);
   const rows = leaderboard(hits, r);
   const players = rows.reduce((s, x) => s + x.damage, 0);
+  if (settled.wheelDamage === null || !loaded) {
+    return (
+      <section className="panel summary" aria-labelledby="summary-title" aria-live="polite">
+        <h2 id="summary-title">Round {nf.format(Number(r))} result pending</h2>
+        <p className="fine">{!loaded ? "Reading this round's attacks from Sepolia. The result appears when the scan completes." : "Waiting for the shared wheel total to settle on Sepolia. The result appears after it is confirmed."}</p>
+      </section>
+    );
+  }
   const total = settled.wheelDamage + players;
   const won = total >= boss.hp;
   return (
@@ -257,7 +263,6 @@ function Summary({ settled, hits }: { settled: Settled | null; hits: Hit[] }) {
         Round <span className="num">{nf.format(Number(r))}</span> took <span className="num">{nf.format(total)}</span> of{" "}
         <span className="num">{nf.format(boss.hp)}</span> HP: <span className="num">{nf.format(settled.wheelDamage)}</span> from the wheel and{" "}
         <span className="num">{nf.format(players)}</span> from players.
-        {!settled.fromStart && " This page joined mid-round, so the wheel share counts only what it watched."}
       </p>
       {rows.length ? (
         <ol className="podium">
@@ -283,7 +288,7 @@ function HowTo() {
         <li><strong>Settlement.</strong> When Squeekchain settles the round, the Boss is defeated if its HP reached 0, or it escapes. A new Boss with a new name and look spawns for the next round.</li>
       </ol>
       <p className="fine">
-        Every player sees the same attacks, read from Sepolia. Wheel damage is tracked by your browser while the page is open, so two players who joined at different times can see different wheel totals.
+        Every player shares the round's wheel work and the attacks read from Sepolia. Wheel distance uses Squeekchain's round work at 878 mm per accepted passage. Final results wait for the round's work to settle on-chain.
       </p>
     </section>
   );

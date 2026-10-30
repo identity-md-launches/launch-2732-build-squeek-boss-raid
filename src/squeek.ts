@@ -1,7 +1,9 @@
 import { API_BASES } from "./config";
+import type { Address } from "viem";
 
 /** The fields of /v1/status this game reads. */
 export type Status = {
+  generatedAt?: string;
   measurement: {
     coreStatus: string;
     speedMmPerSecond: number;
@@ -9,14 +11,25 @@ export type Status = {
     distanceMm: number;
     observedAt: string;
     staleAfterSeconds?: number | string;
+  } | null;
+  builder?: {
+    status?: string;
+    anchor?: { blockHeight?: string; settledThroughRound?: string };
+    queued?: { openRoundWorkUnits?: string };
   };
-  builder?: { anchor?: { blockHeight: string; settledThroughRound?: string } };
 };
 
 /** The fields of /v1/economy/state this game reads. */
 export type Economy = {
   lifecycle: { currentRound: string; paused?: boolean; stage?: string };
   chain?: { safeThroughBlock?: string };
+};
+
+/** Public configuration identifies the sample's round and the settled history to read. */
+export type Core = {
+  identities: { core: Address };
+  configuration: { genesisTimestamp: string; roundDuration: string };
+  core: { settledThroughRound: string };
 };
 
 export type Wheel = {
@@ -48,11 +61,12 @@ export async function getJson<T>(path: string): Promise<T> {
   throw last instanceof Error ? last : new Error("Squeekchain API unreachable");
 }
 
-export function readWheel(s: Status, now = Date.now()): Wheel {
+export function readWheel(s: Status, now = Date.now()): Wheel | null {
   const m = s.measurement;
+  if (!m) return null;
   const observedAt = Date.parse(m.observedAt);
   const staleAfter = Number(m.staleAfterSeconds ?? 60);
-  const stale = !Number.isFinite(observedAt) || (now - observedAt) / 1000 > staleAfter;
+  const stale = !Number.isFinite(observedAt) || !Number.isFinite(staleAfter) || staleAfter <= 0 || (now - observedAt) / 1000 >= staleAfter;
   const speed = Number(m.speedMmPerSecond) || 0;
   return {
     running: !stale && m.coreStatus !== "IDLE" && speed > 0,
